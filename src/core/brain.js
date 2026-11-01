@@ -17,7 +17,15 @@ export function validateBrainData(data) {
 }
 
 export function parseBrainFile(text) {
-  const data = typeof text === 'string' ? JSON.parse(text) : text
+  if (text == null || text === '') {
+    throw new Error('Brain file is empty')
+  }
+  let data
+  try {
+    data = typeof text === 'string' ? JSON.parse(text) : text
+  } catch (err) {
+    throw new Error('Brain file is not valid JSON')
+  }
   return validateBrainData(data)
 }
 

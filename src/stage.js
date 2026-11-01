@@ -5,8 +5,11 @@ import {
   CANVAS_HEIGHT,
   CANVAS_WIDTH,
   defaultTarget,
+  deleteStoredScene,
   listSceneNames,
   loadSceneData,
+  parseTarget,
+  saveSceneToStorage,
   serializeScene,
 } from './core/scenes.js'
 
@@ -32,8 +35,11 @@ export class Stage {
 
   static applyScene(scene) {
     Stage.name = scene.name
-    Stage.target = createVector(width / 2, 50)
-    Stage.objects = scene.objects.map((object) => Barrier.fromJSON(object))
+    const canvasWidth = typeof width === 'number' ? width : CANVAS_WIDTH
+    const canvasHeight = typeof height === 'number' ? height : CANVAS_HEIGHT
+    const target = parseTarget(scene.target, canvasWidth, canvasHeight)
+    Stage.target = createVector(target.x, target.y)
+    Stage.objects = (scene.objects || []).map((object) => Barrier.fromJSON(object))
   }
 
   static loadJSON(jsonString) {
@@ -45,6 +51,7 @@ export class Stage {
     return serializeScene({
       name: Stage.name,
       objects: Stage.objects,
+      target: Stage.target,
     })
   }
 
@@ -54,6 +61,36 @@ export class Stage {
 
   static addBarrier(barrier) {
     Stage.objects.push(barrier)
+    return barrier
+  }
+
+  static removeBarrier(barrier) {
+    Stage.objects = Stage.objects.filter((obj) => obj !== barrier && obj.id !== barrier.id)
+    return Stage.objects
+  }
+
+  static saveCurrent(storage = globalThis.localStorage) {
+    return saveSceneToStorage(
+      {
+        name: Stage.name,
+        objects: Stage.objects,
+        target: Stage.target,
+      },
+      storage
+    )
+  }
+
+  static deleteStored(sceneName, storage = globalThis.localStorage) {
+    return deleteStoredScene(sceneName, storage)
+  }
+
+  static resetTarget() {
+    const target = defaultTarget(
+      typeof width === 'number' ? width : CANVAS_WIDTH,
+      typeof height === 'number' ? height : CANVAS_HEIGHT
+    )
+    Stage.target = createVector(target.x, target.y)
+    return Stage.target
   }
 
   static rocketCollision(rocket) {

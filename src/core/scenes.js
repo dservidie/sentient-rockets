@@ -12,6 +12,7 @@ export const builtinScenes = {
       { ry: 450, rx: 0, rw: 210, rh: 150 },
       { ry: 450, rx: 290, rw: 210, rh: 150 },
     ],
+    target: { x: 250, y: 50 },
   },
   'wide-gap': {
     name: 'wide-gap',
@@ -23,11 +24,23 @@ export const builtinScenes = {
       { ry: 470, rx: 150, rw: 80, rh: 40 },
       { ry: 470, rx: 270, rw: 80, rh: 40 },
     ],
+    target: { x: 250, y: 50 },
   },
 }
 
 export function sceneStorageKey(sceneName) {
   return 'scene-' + String(sceneName || '').replace(/ /g, '-')
+}
+
+export function defaultTarget(width = CANVAS_WIDTH, height = CANVAS_HEIGHT) {
+  return { x: width / 2, y: 50 }
+}
+
+export function parseTarget(raw, width = CANVAS_WIDTH, height = CANVAS_HEIGHT) {
+  if (raw && Number.isFinite(Number(raw.x)) && Number.isFinite(Number(raw.y))) {
+    return { x: Number(raw.x), y: Number(raw.y) }
+  }
+  return defaultTarget(width, height)
 }
 
 export function parseScene(jsonString) {
@@ -48,10 +61,12 @@ export function parseScene(jsonString) {
       rh: object.rh,
       color: object.color || 'white',
     })),
+    target: parseTarget(json.target),
   }
 }
 
 export function serializeScene(scene) {
+  const target = parseTarget(scene && scene.target)
   return JSON.stringify(
     {
       name: scene.name,
@@ -63,6 +78,7 @@ export function serializeScene(scene) {
         rh: object.rh,
         color: object.color,
       })),
+      target,
     },
     null,
     2
@@ -96,6 +112,32 @@ export function loadSceneData(sceneName, storage) {
   return parseScene(raw)
 }
 
-export function defaultTarget(width = CANVAS_WIDTH, height = CANVAS_HEIGHT) {
-  return { x: width / 2, y: 50 }
+export function saveSceneToStorage(scene, storage) {
+  if (!scene || !scene.name) {
+    throw new Error('Scene needs a name')
+  }
+  if (!storage) {
+    throw new Error('No storage available')
+  }
+  const key = sceneStorageKey(scene.name)
+  storage.setItem(key, serializeScene(scene))
+  return key
+}
+
+export function deleteStoredScene(sceneName, storage) {
+  if (!sceneName) {
+    throw new Error('No scene selected')
+  }
+  if (builtinScenes[sceneName]) {
+    throw new Error('Cannot delete a built-in scene')
+  }
+  if (!storage) {
+    throw new Error('No storage available')
+  }
+  const key = sceneStorageKey(sceneName)
+  if (storage.getItem(key) == null) {
+    throw new Error('Unknown scene: ' + sceneName)
+  }
+  storage.removeItem(key)
+  return key
 }
