@@ -6,12 +6,16 @@ import {
   pickParent,
   scoreGeneration,
   selectElite,
+  summarizeGeneration,
 } from '../src/core/fitness.js'
 import {
   builtinScenes,
+  deleteStoredScene,
   listSceneNames,
   loadSceneData,
   parseScene,
+  saveSceneToStorage,
+  sceneStorageKey,
   serializeScene,
 } from '../src/core/scenes.js'
 
@@ -75,6 +79,19 @@ describe('fitness and selection', () => {
     expect(stats.minFinal).toBe(3)
     expect(stats.maxFinal).toBe(8)
   })
+
+  it('summarizes best, average, success and crash counts', () => {
+    const report = summarizeGeneration([
+      { fitness: 1, success: true, crashed: false },
+      { fitness: 0.5, success: false, crashed: true },
+      { fitness: 0, success: false, crashed: false },
+    ])
+    expect(report.size).toBe(3)
+    expect(report.best).toBe(1)
+    expect(report.avg).toBeCloseTo(0.5)
+    expect(report.success).toBe(1)
+    expect(report.crashed).toBe(1)
+  })
 })
 
 describe('scenes from the designer', () => {
@@ -88,10 +105,21 @@ describe('scenes from the designer', () => {
     const original = {
       name: 'custom-run',
       objects: [{ id: 3, ry: 10, rx: 20, rw: 30, rh: 40, color: 'white' }],
+      target: { x: 120, y: 80 },
     }
     const json = serializeScene(original)
     const loaded = parseScene(json)
     expect(loaded).toEqual(original)
+  })
+
+  it('defaults the target when a scene omits it', () => {
+    const loaded = parseScene({ name: 'no-target', objects: [] })
+    expect(loaded.target).toEqual({ x: 250, y: 50 })
+  })
+
+  it('rejects scene JSON without an objects array', () => {
+    expect(() => parseScene('{"name":"bad"}')).toThrow(/objects array/)
+    expect(() => parseScene('')).toThrow(/Missing scene JSON/)
   })
 
   it('lists built-in scenes plus anything saved in localStorage', () => {
@@ -106,5 +134,35 @@ describe('scenes from the designer', () => {
     expect(names).toContain('corridor')
     expect(names).toContain('wide-gap')
     expect(names).toContain('my-dojo')
+  })
+
+  it('saves and deletes custom scenes but refuses built-ins', () => {
+    const store = new Map()
+    const storage = {
+      getItem(key) {
+        return store.has(key) ? store.get(key) : null
+      },
+      setItem(key, value) {
+        store.set(key, value)
+      },
+      removeItem(key) {
+        store.delete(key)
+      },
+      key(index) {
+        return Array.from(store.keys())[index]
+      },
+      get length() {
+        return store.size
+      },
+    }
+    const key = saveSceneToStorage(
+      { name: 'my-dojo', objects: [{ ry: 1, rx: 2, rw: 3, rh: 4 }], target: { x: 9, y: 8 } },
+      storage
+    )
+    expect(key).toBe(sceneStorageKey('my-dojo'))
+    expect(loadSceneData('my-dojo', storage).target).toEqual({ x: 9, y: 8 })
+    expect(() => deleteStoredScene('corridor', storage)).toThrow(/built-in/)
+    deleteStoredScene('my-dojo', storage)
+    expect(() => loadSceneData('my-dojo', storage)).toThrow(/Unknown scene/)
   })
 })

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { fingerprintWeights, parseBrainFile } from '../src/core/brain.js'
+import {
+  brainsHaveSameTopology,
+  cloneBrainData,
+  fingerprintWeights,
+  parseBrainFile,
+  validateBrainData,
+} from '../src/core/brain.js'
 import { mulberry32 } from '../src/core/random.js'
 import { NeuralNetwork } from '../src/neuralNetwork/neural-network.js'
 
@@ -54,5 +60,36 @@ describe('neural network wrapper', () => {
     expect(fingerprintWeights(loaded.getWeightsData())).toBe(nn.fingerprint())
     nn.dispose()
     loaded.dispose()
+  })
+
+  it('rejects empty, corrupt, and incomplete brain files', () => {
+    expect(() => parseBrainFile('')).toThrow(/empty/)
+    expect(() => parseBrainFile('{')).toThrow(/valid JSON/)
+    expect(() => parseBrainFile('{"foo":1}')).toThrow(/topology/)
+    expect(() => validateBrainData({ input_nodes: 8, hidden_nodes: 16, output_nodes: 2, weights: [] })).toThrow(
+      /missing weights/
+    )
+    expect(() =>
+      validateBrainData({
+        input_nodes: 8,
+        hidden_nodes: 16,
+        output_nodes: 2,
+        weights: [{ shape: [1], values: null }],
+      })
+    ).toThrow(/expected format/)
+  })
+
+  it('clones a valid brain and compares topology', () => {
+    const brain = {
+      input_nodes: 8,
+      hidden_nodes: 16,
+      output_nodes: 2,
+      weights: [{ shape: [2, 2], values: [1, 2, 3, 4] }],
+    }
+    const copy = cloneBrainData(brain)
+    copy.weights[0].values[0] = 99
+    expect(brain.weights[0].values[0]).toBe(1)
+    expect(brainsHaveSameTopology(brain, copy)).toBe(true)
+    expect(brainsHaveSameTopology(brain, { ...brain, output_nodes: 3 })).toBe(false)
   })
 })

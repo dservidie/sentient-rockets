@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyRocketStep, commandFromOutputs, SPEED_LIMIT } from '../src/core/physics.js'
+import { applyRocketStep, commandFromOutputs, dragCoefficient, SPEED_LIMIT } from '../src/core/physics.js'
 import { detectRay, projectRay, buildNetworkInputs } from '../src/core/sensors.js'
 
 const physics = {
@@ -66,6 +66,11 @@ describe('rocket physics', () => {
     expect(command.thrust).toBeCloseTo(0.400005)
     expect(command.steering).toBe(0.2)
     expect(command.duration).toBe(10)
+  })
+
+  it('uses more drag when the rocket is sideways to its velocity', () => {
+    expect(dragCoefficient(0, 0.005, 2.5)).toBeCloseTo(0.005)
+    expect(dragCoefficient(90, 0.005, 2.5)).toBeCloseTo(2.5)
   })
 })
 
