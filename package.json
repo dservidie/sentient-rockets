@@ -1,0 +1,15 @@
+{
+  "name": "sentient-rockets",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1",
+    "@tensorflow/tfjs": "4.22.0",
+    "vitest": "^3.2.4"
+  }
+}
