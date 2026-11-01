@@ -63,4 +63,6 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-`npm test` runs the unit tests (networks, fitness, physics, sensors, scenes, brain save/load). `npm run test:e2e` serves the site and checks the sim, the scene designer, and a brain moving from `corridor` to `wide-gap`.
+`npm test` runs the unit tests with coverage (networks, fitness, physics, sensors, scenes, collisions, brain save/load). `npm run test:e2e` serves the site and drives the sim and scene designer through Playwright: every QuickSettings control, start/pause/reset, speed, generations, fitness stats, collisions, the designer, brain export/import/evaluate/continue, invalid files, localStorage, and window resize.
+
+Brain transfer lives in the **Brains** QuickSettings panel, same UI as Stage, Run, and Physics. Load brain uses the panel's file chooser; QuickSettings has no other file-picker control.
