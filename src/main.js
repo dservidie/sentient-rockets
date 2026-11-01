@@ -4,54 +4,70 @@ import { NeuralNetwork } from './neuralNetwork/neural-network.js'
 import { Population } from './population.js'
 import { Stage } from './stage.js'
 
-var paused = false
 var guiStage
+var guiBrains
+var guiRun
 var guiPhysics
-var scenesList
+var qsBrains
 var generationP
 var lifeP
 var statusP
 var logP
 var framesCounter = 0
 var generationCounter = 1
-var drawing = true
 var lastLoadedBrain = null
 var bootScene = 'corridor'
+var lastStatus = 'No brain loaded yet.'
+
+window.scenesList = []
+window.runSettings = {
+  paused: false,
+  debugMode: config.debugMode,
+  drawing: true,
+  simSpeed: 60,
+  simSpeedMin: 5,
+  simSpeedMax: 60,
+  simSpeedStep: 1,
+}
 
 const queryOptions = applyQueryConfig(typeof location !== 'undefined' ? location.search : '')
 bootScene = queryOptions.scene || 'corridor'
+window.runSettings.debugMode = config.debugMode
 
 function setup() {
   const canvas = createCanvas(500, 600)
   canvas.parent('canvasDiv')
+  frameRate(window.runSettings.simSpeed)
 
   Stage.initialize(bootScene)
   Population.initialize()
   createUI()
-  refreshSceneSelect()
-  setStatus('Training. Scene: ' + (Stage.name || bootScene))
+  refreshScenesList()
+  setBrainStatus('Training. Scene: ' + (Stage.name || bootScene))
 }
 
 function draw() {
-  if (paused) return
-  if (drawing) background(0)
-  Population.run(drawing, framesCounter)
+  config.debugMode = window.runSettings.debugMode
+  frameRate(window.runSettings.simSpeed)
+  if (window.runSettings.paused) return
+
+  if (window.runSettings.drawing) background(0)
+  Population.run(window.runSettings.drawing, framesCounter)
 
   const simulationFinished = Population.simulationFinished(framesCounter)
   if (skipFrames(15)) {
-    const modeLabel = Population.mode === 'evaluate' ? 'Evaluation' : 'Generation'
-    generationP.html(modeLabel + ' #' + generationCounter)
-    lifeP.html('Frame: ' + framesCounter + ' - ' + frameRate().toFixed(1))
+    updateDisplay()
   }
 
   framesCounter++
-  Stage.draw(drawing)
+  Stage.draw(window.runSettings.drawing)
 
-  if (simulationFinished && !paused) {
-    paused = true
+  if (simulationFinished && !window.runSettings.paused) {
+    window.runSettings.paused = true
     Population.evaluate().then((report) => {
+      updateDisplay()
       if (Population.mode === 'evaluate') {
-        setStatus(
+        setBrainStatus(
           'Evaluation done. Best fitness ' +
             report.best.toFixed(3) +
             ', avg ' +
@@ -61,75 +77,131 @@ function draw() {
             '/' +
             report.size
         )
-        statusP.html(
-          'Evaluate: best ' +
-            report.best.toFixed(3) +
-            ' | avg ' +
-            report.avg.toFixed(3) +
-            ' | success ' +
-            report.success +
-            '/' +
-            report.size
-        )
         return
       }
       framesCounter = 0
       generationCounter++
-      paused = false
-      setStatus('Training generation #' + generationCounter + ' on ' + (Stage.name || 'scene'))
+      window.runSettings.paused = false
+      if (!String(lastStatus).startsWith('Could not load brain')) {
+        setBrainStatus('Training generation #' + generationCounter + ' on ' + (Stage.name || 'scene'))
+      }
     })
   }
 }
 
+function updateDisplay() {
+  const modeLabel = Population.mode === 'evaluate' ? 'Evaluation' : 'Generation'
+  const report = Population.lastReport
+  generationP.html(modeLabel + ' #' + generationCounter)
+  lifeP.html('Frame: ' + framesCounter + ' - ' + frameRate().toFixed(1))
+  statusP.html(
+    'Flying ' +
+      Population.rockets.filter((rocket) => rocket.flying).length +
+      ' | hit target ' +
+      Population.successCounter +
+      ' | crashed ' +
+      Population.failedCounter +
+      (report
+        ? ' | last best ' + report.best.toFixed(3) + ' avg ' + report.avg.toFixed(3)
+        : '')
+  )
+}
+
 function mouseClicked(e) {
   if (e && e.target && e.target.tagName === 'CANVAS') {
-    paused = !paused
+    window.runSettings.paused = !window.runSettings.paused
+    syncRunGui()
   }
+}
+
+function windowResized() {
+  if (guiStage) guiStage.setPosition(5, 5)
+  if (guiRun) guiRun.setPosition(210, 5)
+  if (guiBrains) guiBrains.setPosition(5, 280)
+  if (guiPhysics) guiPhysics.setPosition(Math.max(220, windowWidth - 220), 5)
 }
 
 function skipFrames(frames) {
   return framesCounter % frames === 0
 }
 
-function setStatus(text) {
-  const el = document.getElementById('brainStatus')
-  if (el) el.textContent = text
+function setBrainStatus(text) {
+  lastStatus = text
+  if (qsBrains) {
+    qsBrains.setValue('Status', text)
+  }
 }
 
-function refreshSceneSelect() {
-  const select = document.getElementById('sceneSelect')
-  if (!select) return
+function syncRunGui() {
+  if (!guiRun) return
+  const qs = guiRun.getQS()
+  if (qs && qs.setValue) {
+    qs.setValue('paused', window.runSettings.paused)
+  }
+}
+
+function updateDropDown(qs, title, names, selected) {
+  if (!qs || !qs._controls || !qs._controls[title]) return selected
+  const select = qs._controls[title].control
+  const pick = names.indexOf(selected) >= 0 ? selected : names[0]
+  select.innerHTML = ''
+  names.forEach((name) => {
+    const option = document.createElement('option')
+    option.label = name
+    option.innerText = name
+    select.add(option)
+  })
+  select.selectedIndex = Math.max(0, names.indexOf(pick))
+  return pick
+}
+
+function refreshScenesList() {
   const names = Stage.listScenes()
-  scenesList = names
-  select.innerHTML = names
-    .map((name) => '<option value="' + name + '"' + (name === Stage.name ? ' selected' : '') + '>' + name + '</option>')
-    .join('')
+  const previous =
+    typeof window.scenesList === 'string' && names.indexOf(window.scenesList) >= 0
+      ? window.scenesList
+      : Stage.name && names.indexOf(Stage.name) >= 0
+        ? Stage.name
+        : names[0]
+  const qs = guiStage && guiStage.getQS()
+  window.scenesList = updateDropDown(qs, 'scenesList', names, previous) || names[0]
 }
 
 function restartRun(options = {}) {
   framesCounter = 0
   generationCounter = 1
-  paused = false
+  window.runSettings.paused = false
+  syncRunGui()
   if (options.brain) {
     Population.loadBrain(options.brain, options)
   } else {
     Population.initialize({ mode: options.mode || 'train' })
   }
+  updateDisplay()
+}
+
+function resetSimulation() {
+  const keepBrain = Population.mode !== 'train' && lastLoadedBrain
+  restartRun(
+    keepBrain
+      ? { brain: lastLoadedBrain, mode: Population.mode, mutate: false }
+      : { mode: 'train' }
+  )
+  setBrainStatus('Reset. Scene: ' + (Stage.name || bootScene))
 }
 
 function loadSelectedScene() {
-  const select = document.getElementById('sceneSelect')
-  const sceneName = (select && select.value) || scenesList || bootScene
+  const sceneName = window.scenesList || bootScene
   Stage.loadByName(sceneName)
   if (Population.mode === 'evaluate' && lastLoadedBrain) {
     restartRun({ brain: lastLoadedBrain, mode: 'evaluate' })
-    setStatus('Loaded scene ' + sceneName + '. Evaluating the imported brain.')
+    setBrainStatus('Loaded scene ' + sceneName + '. Evaluating the imported brain.')
   } else if (Population.mode === 'train' && lastLoadedBrain && Population.loadedBrain) {
     restartRun({ brain: lastLoadedBrain, mode: 'train', mutate: true })
-    setStatus('Loaded scene ' + sceneName + '. Continuing from the imported brain.')
+    setBrainStatus('Loaded scene ' + sceneName + '. Continuing from the imported brain.')
   } else {
     restartRun({ mode: 'train' })
-    setStatus('Loaded scene ' + sceneName + '. Training from random brains.')
+    setBrainStatus('Loaded scene ' + sceneName + '. Training from random brains.')
   }
 }
 
@@ -153,24 +225,34 @@ function exportBestBrain() {
   link.click()
   link.remove()
   URL.revokeObjectURL(url)
-  setStatus('Exported best brain from ' + (Stage.name || 'the current scene') + '.')
+  setBrainStatus('Exported best brain from ' + (Stage.name || 'the current scene') + '.')
   return data
 }
 
 function importBrainData(data, mode) {
-  const brain = parseBrainFile(data)
+  let brain
+  try {
+    brain = parseBrainFile(data)
+  } catch (err) {
+    setBrainStatus('Could not load brain: ' + err.message)
+    return null
+  }
   lastLoadedBrain = brain
+  try {
+    localStorage.setItem('brain-last-import', JSON.stringify(brain))
+  } catch (err) {
+    // ignore quota errors
+  }
   restartRun({
     brain,
     mode: mode || 'evaluate',
     mutate: mode === 'train',
   })
-  setStatus(
+  setBrainStatus(
     mode === 'train'
       ? 'Loaded brain. Continuing training from those weights.'
       : 'Loaded brain. Evaluating with no evolution.'
   )
-  statusP.html(mode === 'train' ? 'Mode: continue training' : 'Mode: evaluate')
   return brain
 }
 
@@ -180,40 +262,57 @@ function loadBrainFromFile(file, mode) {
 
 function evaluateLoadedBrain() {
   if (!lastLoadedBrain) {
-    setStatus('Load a brain file first.')
+    setBrainStatus('Load a brain file first.')
     return
   }
   restartRun({ brain: lastLoadedBrain, mode: 'evaluate' })
-  setStatus('Evaluating the loaded brain. No mutation this run.')
+  setBrainStatus('Evaluating the loaded brain. No mutation this run.')
 }
 
 function continueFromLoadedBrain() {
   if (!lastLoadedBrain) {
-    setStatus('Load a brain file first.')
+    setBrainStatus('Load a brain file first.')
     return
   }
   restartRun({ brain: lastLoadedBrain, mode: 'train', mutate: false })
-  setStatus('Continuing training from the loaded brain, not random weights.')
+  setBrainStatus('Continuing training from the loaded brain, not random weights.')
 }
 
 function createUI() {
+  Object.assign(config.physics, config.physicsRanges)
+
   guiStage = createGui('Stage').setPosition(5, 5)
-  const qsControls = guiStage.getQS()
-  qsControls.addHTML(
+  const qsStage = guiStage.getQS()
+  qsStage.addHTML(
     'How to use',
-    'Pick a scene on the right, train, then export the best brain. Load that file in another scene to evaluate it or keep training.'
+    'Pick a scene, train, then export the best brain. Load that file in another scene to evaluate it or keep training.'
   )
-  scenesList = Stage.listScenes()
-  window.scenesList = scenesList
+  window.scenesList = Stage.listScenes()
   guiStage.addGlobals('scenesList')
-  guiStage.addComponent({
-    label: 'Load Scene',
-    callback: loadSelectedScene,
+  guiStage.addComponent({ label: 'Load Scene', callback: loadSelectedScene })
+  guiStage.addComponent({ label: 'Reset', callback: resetSimulation })
+
+  guiBrains = createGui('Brains').setPosition(5, 280)
+  qsBrains = guiBrains.getQS()
+  qsBrains.addHTML(
+    'How to use',
+    'Export a trained brain, then load it in another scene. Evaluate runs it as-is. Continue training mutates from those weights.'
+  )
+  qsBrains.addHTML('Status', lastStatus)
+  guiBrains.addComponent({ label: 'Export best brain', callback: exportBestBrain })
+  qsBrains.addFileChooser('Load brain', 'Choose JSON', '.json,application/json', (file) => {
+    if (!file) return
+    loadBrainFromFile(file, 'evaluate')
   })
+  guiBrains.addComponent({ label: 'Evaluate loaded brain', callback: evaluateLoadedBrain })
+  guiBrains.addComponent({ label: 'Continue training from loaded', callback: continueFromLoadedBrain })
+
+  guiRun = createGui('Run').setPosition(210, 5)
+  guiRun.addObject(window.runSettings, 'paused', 'debugMode', 'drawing', 'simSpeed')
 
   sliderRange(0, Math.max(width, height), 0.0001)
   guiPhysics = createGui('Physics (double click to expand)').setPosition(width - 200, 5)
-  guiPhysics.addObject({ ...config.physics, ...config.physicsRanges })
+  guiPhysics.addObject(config.physics)
   const qsPhysics = guiPhysics.getQS()
   qsPhysics.saveInLocalStorage('sentient-rockets-physics')
   qsPhysics.collapse()
@@ -230,44 +329,27 @@ function createUI() {
   statusP.parent('display')
   logP.parent('display')
 
-  const sceneSelect = document.getElementById('sceneSelect')
-  const loadSceneBtn = document.getElementById('loadSceneBtn')
-  const exportBtn = document.getElementById('exportBrain')
-  const importBtn = document.getElementById('importBrain')
-  const brainFile = document.getElementById('brainFile')
-  const evaluateBtn = document.getElementById('evaluateBrain')
-  const continueBtn = document.getElementById('continueBrain')
-
-  if (loadSceneBtn) loadSceneBtn.addEventListener('click', loadSelectedScene)
-  if (sceneSelect) {
-    sceneSelect.addEventListener('change', () => {
-      scenesList = sceneSelect.value
-    })
-  }
-  if (exportBtn) exportBtn.addEventListener('click', exportBestBrain)
-  if (importBtn && brainFile) {
-    importBtn.addEventListener('click', () => brainFile.click())
-    brainFile.addEventListener('change', () => {
-      const file = brainFile.files && brainFile.files[0]
-      if (!file) return
-      loadBrainFromFile(file, 'evaluate').finally(() => {
-        brainFile.value = ''
-      })
-    })
-  }
-  if (evaluateBtn) evaluateBtn.addEventListener('click', evaluateLoadedBrain)
-  if (continueBtn) continueBtn.addEventListener('click', continueFromLoadedBrain)
+  updateDisplay()
 }
 
 window.setup = setup
 window.draw = draw
 window.mouseClicked = mouseClicked
+window.windowResized = windowResized
 
 window.sentientRockets = {
   getGeneration: () => generationCounter,
+  getFrames: () => framesCounter,
   getMode: () => Population.mode,
   getScene: () => Stage.name,
+  getPaused: () => window.runSettings.paused,
+  getStatus: () => lastStatus,
   getReport: () => Population.lastReport,
+  getCounters: () => ({
+    flying: Population.rockets.filter((rocket) => rocket.flying).length,
+    success: Population.successCounter,
+    crashed: Population.failedCounter,
+  }),
   getFingerprint: () => {
     const rocket = Population.rockets[0]
     return rocket ? rocket.neuralNetwork.fingerprint() : null
@@ -281,10 +363,16 @@ window.sentientRockets = {
     }),
   importBrainJson: (data, mode) => importBrainData(data, mode),
   loadScene: (name) => {
-    const select = document.getElementById('sceneSelect')
-    if (select) select.value = name
+    window.scenesList = name
     loadSelectedScene()
   },
+  reset: resetSimulation,
+  setPaused: (value) => {
+    window.runSettings.paused = Boolean(value)
+    syncRunGui()
+  },
+  refreshScenesList,
+  runSettings: window.runSettings,
   config,
   Population,
   Stage,

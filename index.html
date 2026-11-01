@@ -29,30 +29,6 @@
     <div id="display">
       <h3>Display</h3>
     </div>
-    <div id="outDiv">
-      <span class="fifty">
-        <div id="controls">
-          <h3>Brains</h3>
-          <p class="help">Train in one scene, export the best brain, then load it in another scene to evaluate it or keep training from those weights.</p>
-          <label for="sceneSelect">Scene</label>
-          <select id="sceneSelect"></select>
-          <button id="loadSceneBtn" type="button">Load scene</button>
-          <button id="exportBrain" type="button">Export best brain</button>
-          <button id="importBrain" type="button">Load brain</button>
-          <input id="brainFile" type="file" accept="application/json,.json" hidden />
-          <button id="evaluateBrain" type="button">Evaluate loaded brain</button>
-          <button id="continueBrain" type="button">Continue training from loaded</button>
-          <p id="brainStatus">No brain loaded yet.</p>
-        </div>
-      </span>
-      <span>
-        <div class="fifty">
-          <div id="physics">
-            <h3>Physics</h3>
-          </div>
-        </div>
-      </span>
-    </div>
   </div>
 </body>
 
