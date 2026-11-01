@@ -20,14 +20,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"
     integrity="sha384-vE8hbVJ4lezako5rlvE7bY0BVzWlFhZncPlckrqNwcUQpVtgbENTgZ8TBbnPjZre"
     crossorigin="anonymous"></script>
-  <script src="src/neuralNetwork/neural-network.js"></script>
-  <script src="src/config.js"></script>
-  <script src="src/barrier.js"></script>
-  <script src="src/stage.js"></script>
-  <script src="src/sensor.js"></script>
-  <script src="src/rocket.js"></script>
-  <script src="src/population.js"></script>
-  <script src="src/main.js"></script>
+  <script type="module" src="src/main.js"></script>
 </head>
 
 <body>
@@ -39,7 +32,17 @@
     <div id="outDiv">
       <span class="fifty">
         <div id="controls">
-          <h3>Configurations</h3>
+          <h3>Brains</h3>
+          <p class="help">Train in one scene, export the best brain, then load it in another scene to evaluate it or keep training from those weights.</p>
+          <label for="sceneSelect">Scene</label>
+          <select id="sceneSelect"></select>
+          <button id="loadSceneBtn" type="button">Load scene</button>
+          <button id="exportBrain" type="button">Export best brain</button>
+          <button id="importBrain" type="button">Load brain</button>
+          <input id="brainFile" type="file" accept="application/json,.json" hidden />
+          <button id="evaluateBrain" type="button">Evaluate loaded brain</button>
+          <button id="continueBrain" type="button">Continue training from loaded</button>
+          <p id="brainStatus">No brain loaded yet.</p>
         </div>
       </span>
       <span>

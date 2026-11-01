@@ -1,4 +1,8 @@
-class NeuralNetwork {
+import { gaussian } from '../core/math.js'
+import { defaultGaussian, defaultRandom } from '../core/random.js'
+import { fingerprintWeights, validateBrainData } from '../core/brain.js'
+
+export class NeuralNetwork {
   constructor(a, b, c, d) {
     if (NeuralNetwork.isModel(a)) {
       this.model = a
@@ -23,33 +27,27 @@ class NeuralNetwork {
       }
       modelCopy.setWeights(weightCopies)
     })
-    return new NeuralNetwork(
-      modelCopy,
-      this.input_nodes,
-      this.hidden_nodes,
-      this.output_nodes
-    )
+    return new NeuralNetwork(modelCopy, this.input_nodes, this.hidden_nodes, this.output_nodes)
   }
 
-  mutate(rate) {
+  mutate(rate, rng = defaultRandom, gauss = defaultGaussian) {
     tf.tidy(() => {
       const weights = this.model.getWeights()
       const mutatedWeights = []
       for (let i = 0; i < weights.length; i++) {
-        let tensor = weights[i]
-        let shape = weights[i].shape
-        let values = tensor.dataSync().slice()
+        const tensor = weights[i]
+        const shape = weights[i].shape
+        const values = tensor.dataSync().slice()
         for (let j = 0; j < values.length; j++) {
-          if (random(1) < rate) {
-            let w = values[j]
-            values[j] = w + randomGaussian()
+          if (rng() < rate) {
+            values[j] = values[j] + gauss()
           }
         }
-        let newTensor = tf.tensor(values, shape)
-        mutatedWeights[i] = newTensor
+        mutatedWeights[i] = tf.tensor(values, shape)
       }
       this.model.setWeights(mutatedWeights)
     })
+    return this
   }
 
   dispose() {
@@ -60,26 +58,64 @@ class NeuralNetwork {
     return tf.tidy(() => {
       const xs = tf.tensor2d([inputs])
       const ys = this.model.predict(xs)
-      const outputs = ys.dataSync()
-      // console.log(outputs);
-      return outputs
+      return Array.from(ys.dataSync())
     })
   }
 
   createModel() {
     const model = tf.sequential()
-    const hidden = tf.layers.dense({
-      units: this.hidden_nodes,
-      inputShape: [this.input_nodes],
-      activation: 'sigmoid',
-    })
-    model.add(hidden)
-    const output = tf.layers.dense({
-      units: this.output_nodes,
-      activation: 'sigmoid',
-    })
-    model.add(output)
+    model.add(
+      tf.layers.dense({
+        units: this.hidden_nodes,
+        inputShape: [this.input_nodes],
+        activation: 'sigmoid',
+      })
+    )
+    model.add(
+      tf.layers.dense({
+        units: this.output_nodes,
+        activation: 'sigmoid',
+      })
+    )
     return model
+  }
+
+  getWeightsData() {
+    return this.model.getWeights().map((tensor) => ({
+      shape: tensor.shape.slice(),
+      values: Array.from(tensor.dataSync()),
+    }))
+  }
+
+  setWeightsData(weights) {
+    const tensors = weights.map((layer) => tf.tensor(layer.values, layer.shape))
+    this.model.setWeights(tensors)
+    tensors.forEach((tensor) => tensor.dispose())
+    return this
+  }
+
+  fingerprint() {
+    return fingerprintWeights(this.getWeightsData())
+  }
+
+  toJSON(extra = {}) {
+    return {
+      version: 1,
+      kind: 'sentient-rockets-brain',
+      input_nodes: this.input_nodes,
+      hidden_nodes: this.hidden_nodes,
+      output_nodes: this.output_nodes,
+      activation: 'sigmoid',
+      weights: this.getWeightsData(),
+      ...extra,
+    }
+  }
+
+  static fromJSON(data) {
+    const brain = validateBrainData(data)
+    const network = new NeuralNetwork(brain.input_nodes, brain.hidden_nodes, brain.output_nodes)
+    network.setWeightsData(brain.weights)
+    return network
   }
 
   async saveModel(name) {
@@ -88,7 +124,6 @@ class NeuralNetwork {
 
   static async loadModel(name, inputNodes, hiddenNodes, outputNodes) {
     const model = await tf.loadLayersModel(`localstorage://model-${name}`)
-    console.log('loadModel/model: ', model)
     return new NeuralNetwork(model, inputNodes, hiddenNodes, outputNodes)
   }
 
@@ -101,3 +136,5 @@ class NeuralNetwork {
     )
   }
 }
+
+export { gaussian }

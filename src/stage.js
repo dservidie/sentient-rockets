@@ -1,41 +1,55 @@
-class Stage {
+import { Barrier } from './barrier.js'
+import { rocketHitsWorld } from './core/collision.js'
+import {
+  builtinScenes,
+  CANVAS_HEIGHT,
+  CANVAS_WIDTH,
+  defaultTarget,
+  listSceneNames,
+  loadSceneData,
+  serializeScene,
+} from './core/scenes.js'
+
+export class Stage {
   static name
   static target
   static objects
 
-  static initialize() {
+  static initialize(sceneName) {
     Stage.target = createVector(width / 2, 50)
     Stage.objects = []
+    Stage.name = sceneName || ''
+    if (sceneName) {
+      Stage.loadByName(sceneName)
+    }
   }
 
-  static loadByName(sceneName) {
-    let sceneStorageName = 'scene-' + sceneName.replace(' ', '-')
-    let sceneJson = localStorage.getItem(sceneStorageName)
-    Stage.name = sceneName
-    Stage.loadJSON(sceneJson)
+  static loadByName(sceneName, storage = globalThis.localStorage) {
+    const scene = loadSceneData(sceneName, storage)
+    Stage.applyScene(scene)
+    return scene
+  }
+
+  static applyScene(scene) {
+    Stage.name = scene.name
+    Stage.target = createVector(width / 2, 50)
+    Stage.objects = scene.objects.map((object) => Barrier.fromJSON(object))
   }
 
   static loadJSON(jsonString) {
-    let json = JSON.parse(jsonString)
-    Object.assign(Stage, json)
-    console.log('Stage.name', Stage.name)
-    Stage.target = createVector(width / 2, 50)
-    Stage.objects = json.objects.map((o) => Barrier.fromJSON(o))
+    const json = typeof jsonString === 'string' ? JSON.parse(jsonString) : jsonString
+    Stage.applyScene(json)
   }
 
   static toJSON() {
-    let jsonScene = {
+    return serializeScene({
       name: Stage.name,
       objects: Stage.objects,
-    }
-    return JSON.stringify(jsonScene, null, 2)
+    })
   }
 
-  static listScenes() {
-    return Object.keys(localStorage)
-      .filter((k) => k.startsWith('scene-'))
-      .map((s) => s.replace('scene-', ''))
-      .sort()
+  static listScenes(storage = globalThis.localStorage) {
+    return listSceneNames(storage)
   }
 
   static addBarrier(barrier) {
@@ -43,34 +57,19 @@ class Stage {
   }
 
   static rocketCollision(rocket) {
-    // Rocket hits border of canvas
-    if (
-      rocket.pos.x > width ||
-      rocket.pos.x < 0 ||
-      rocket.pos.y > height ||
-      rocket.pos.y < 0
-    ) {
-      return true
-    }
-    // Rocket hits one object
-    for (let obj of Stage.objects) {
-      if (obj.isCollidingWithPoint(rocket.pos.x, rocket.pos.y)) return true
-    }
-    return false
+    return rocketHitsWorld(rocket, Stage.objects, { width, height })
   }
 
   static draw(mustDraw) {
     if (mustDraw) {
-      for (let obj of this.objects) {
+      for (const obj of this.objects) {
         obj.draw()
       }
-      // Renders target
       fill('LightGreen')
       ellipse(Stage.target.x, Stage.target.y, 16, 16)
     }
   }
 
-  // draw an arrow for a vector at a given base position
   static drawArrow(vector, location, color, scale = 5) {
     push()
     stroke(color)
@@ -79,9 +78,11 @@ class Stage {
     translate(location.x, location.y)
     line(0, 0, vector.x * scale, vector.y * scale)
     rotate(vector.heading())
-    let arrowSize = 3
+    const arrowSize = 3
     translate(vector.mag() * scale - arrowSize, 0)
     triangle(0, arrowSize / 2, 0, -arrowSize / 2, arrowSize, 0)
     pop()
   }
 }
+
+export { builtinScenes, CANVAS_HEIGHT, CANVAS_WIDTH, defaultTarget }

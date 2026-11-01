@@ -1,216 +1,177 @@
-class Population {
+import { config } from './config.js'
+import { cloneBrainData } from './core/brain.js'
+import {
+  isGenerationDone,
+  normalizeFitness,
+  pickParent,
+  scoreGeneration,
+  selectElite,
+  summarizeGeneration,
+} from './core/fitness.js'
+import { defaultRandom } from './core/random.js'
+import { NeuralNetwork } from './neuralNetwork/neural-network.js'
+import { Rocket } from './rocket.js'
+
+export class Population {
   static successCounter = 0
   static failedCounter = 0
-
   static rockets = []
   static popSize
+  static mode = 'train'
+  static lastReport = null
+  static loadedBrain = null
 
-  static initialize() {
-    // Array of rockets
+  static initialize(options = {}) {
     Population.rockets = []
-    // Amount of rockets
-    Population.popSize = config.simulation.popSize
+    Population.popSize = options.popSize || config.simulation.popSize
+    Population.mode = options.mode || 'train'
+    Population.successCounter = 0
+    Population.failedCounter = 0
+    Population.lastReport = null
+    Rocket.launchSequenceCounter = 0
 
-    // Associates a rocket to an array index
-    for (var i = 0; i < Population.popSize; i++) {
+    if (options.brain) {
+      Population.loadedBrain = cloneBrainData(options.brain)
+      Population.seedFromBrain(options.brain, { mutate: options.mutate === true })
+      return
+    }
+
+    for (let i = 0; i < Population.popSize; i++) {
       Population.rockets[i] = new Rocket()
     }
   }
 
+  static seedFromBrain(brainData, options = {}) {
+    const source = NeuralNetwork.fromJSON(brainData)
+    Population.rockets = []
+    Rocket.launchSequenceCounter = 0
+    for (let i = 0; i < Population.popSize; i++) {
+      const child = source.copy()
+      if (options.mutate) child.mutate(config.mutationRate)
+      Population.rockets.push(new Rocket(child))
+    }
+    source.dispose()
+  }
+
+  static resetFlights() {
+    Rocket.launchSequenceCounter = 0
+    Population.successCounter = 0
+    Population.failedCounter = 0
+    Population.rockets.forEach((rocket, index) => {
+      rocket.launchSequence = index
+      rocket.resetFlight()
+    })
+  }
+
   static async evaluate() {
-    // Calculates the performance of the generation to normalize the fitness.
-    let maxFuelUsed = 0
-    let minFuelUsed = Number.MAX_VALUE / 2
-    let maxDistanceTraveled = 0
-    let minDistanceTraveled = Number.MAX_VALUE / 2
-    let maxClosestTargetDistance = 0
-    let minClosestTargetDistance = Number.MAX_VALUE / 2
-    let maxFinalTargetDistance = 0
-    let minFinalTargetDistance = Number.MAX_VALUE / 2
-    let maxDetections = 0
-    let minDetections = Number.MAX_VALUE / 2
-
-    for (var r of Population.rockets) {
-      r.rocketSensorsTotalDetections = r.getSensorsDetections().length
-
-      if (r.fuelUsed > maxFuelUsed) maxFuelUsed = r.fuelUsed
-      if (r.fuelUsed < minFuelUsed) minFuelUsed = r.fuelUsed
-      if (r.distanceTraveled > maxDistanceTraveled) maxDistanceTraveled = r.distanceTraveled
-      if (r.distanceTraveled < minDistanceTraveled) minDistanceTraveled = r.distanceTraveled
-      if (r.closestTargetDistance > maxClosestTargetDistance)
-        maxClosestTargetDistance = r.closestTargetDistance
-      if (r.closestTargetDistance < minClosestTargetDistance)
-        minClosestTargetDistance = r.closestTargetDistance
-      if (r.finalTargetDistance > maxClosestTargetDistance)
-        maxFinalTargetDistance = r.finalTargetDistance
-      if (r.finalTargetDistance < minClosestTargetDistance)
-        minFinalTargetDistance = r.finalTargetDistance
-      if (r.rocketSensorsTotalDetections > maxDetections)
-        maxDetections = r.rocketSensorsTotalDetections
-      if (r.rocketSensorsTotalDetections < minDetections)
-        minDetections = r.rocketSensorsTotalDetections
+    for (const rocket of Population.rockets) {
+      rocket.rocketSensorsTotalDetections = rocket.getSensorsDetections().length
     }
-    // TMP fix
-    maxFuelUsed += 0.0000000001
-    maxDistanceTraveled += 0.0000000001
-    maxClosestTargetDistance += 0.0000000001
-    maxFinalTargetDistance += 0.0000000001
-    maxDetections += 0.0000000001
 
-    if (config.debugMode) {
-      console.log('#######################################')
-      // console.log('fuelUsed: ', minFuelUsed, ' / ', maxFuelUsed)
-      // console.log('distanceTraveled: ', minDistanceTraveled, ' / ', maxDistanceTraveled)
-      // console.log(
-      //   'closestTargetDistance: ',
-      //   minClosestTargetDistance,
-      //   ' / ',
-      //   maxClosestTargetDistance
-      // )
-      // console.log(
-      //   'finalTargetDistance: ',
-      //   minFinalTargetDistance,
-      //   ' / ',
-      //   maxFinalTargetDistance
-      // )
-      console.log('Detections: ', minDetections, ' / ', maxDetections)
-      console.log('#######################################')
+    const scores = {
+      closestTargetDistance: config.score_ClosestTargetDistance,
+      finalTargetDistance: config.score_FinalTargetDistance,
+      sensorDetection: config.score_SensorDetection,
     }
-    // Calculates fitness
-    for (let r of Population.rockets) {
-      // let fuelUsedScore =
-      //   map(r.fuelUsed, minFuelUsed, maxFuelUsed, 0, 1) * config.score_FuelUsed
-      // let distanceTraveledScore =
-      //   map(r.distanceTraveled, minDistanceTraveled, maxDistanceTraveled, 0, 1) *
-      //   config.score_DistanceTraveled
-      let closestTargetDistanceScore =
-        map(
-          r.closestTargetDistance,
-          minClosestTargetDistance,
-          maxClosestTargetDistance,
-          1,
-          0
-        ) * config.score_ClosestTargetDistance
-      let finalTargetDistanceScore =
-        map(r.finalTargetDistance, minFinalTargetDistance, maxFinalTargetDistance, 1, 0) *
-        config.score_FinalTargetDistance
-
-      let finalDetectionsScore =
-        map(r.rocketSensorsTotalDetections, minDetections, maxDetections, 1, 0) *
-        config.score_SensorDetection
-
-      r.fitness = closestTargetDistanceScore + finalTargetDistanceScore //finalDetectionsScore
-      //  fuelUsedScore +
-      //  distanceTraveledScore +
-
-      if (config.debugMode) {
-        console.log('######################')
-        // console.log('fuelUsedScore:', fuelUsedScore, ' / r.fuelUsed: ', r.fuelUsed)
-        // console.log(
-        //   'distanceTraveledScore:',
-        //   distanceTraveledScore,
-        //   ' / r.distanceTraveled: ',
-        //   r.distanceTraveled
-        // )
-        // console.log(
-        //   'closestTargetDistanceScore:',
-        //   closestTargetDistanceScore,
-        //   ' / r.closestTargetDistance: ',
-        //   r.closestTargetDistance
-        // )
-        // console.log(
-        //   'finalTargetDistanceScore:',
-        //   finalTargetDistanceScore,
-        //   ' / r.finalTargetDistance: ',
-        //   r.finalTargetDistance
-        // )
-        console.log(
-          'finalDetectionsScore:',
-          finalDetectionsScore,
-          ' / r.rocketSensorsTotalDetections: ',
-          r.rocketSensorsTotalDetections
-        )
-
-        console.log('# FITNESS: ', r.fitness)
-      }
-    }
-    console.log('### Population.rockets', Population.rockets)
-
-    // Normalizing the fitness value.
-    const maxFitness = Math.max(...Population.rockets.map((r) => r.fitness))
-    Population.rockets.forEach((r) => (r.fitness /= maxFitness))
+    scoreGeneration(Population.rockets, scores)
+    normalizeFitness(Population.rockets)
     Population.rockets.sort((a, b) => b.fitness - a.fitness)
 
-    console.log(
-      '#### ROCKETS fitness: ',
-      Population.rockets.map((r) => r.fitness)
-    )
+    const report = summarizeGeneration(Population.rockets)
+    report.mode = Population.mode
+    Population.lastReport = report
 
-    // Take rockets fitness make in to scale of 10 to 100
-    // A rocket with high fitness will be most likely in the mating pool
-    const bestRockets = Population.rockets.slice(0, Math.ceil(Population.popSize * 0.2))
-    console.log('bestRockets', bestRockets)
-    // console.log('bestRockets', bestRockets)
-    let newRockets = []
-    Rocket.launchSequenceCounter = 0 // Just for graphical look.
-    for (var i = 0; i < Population.popSize; i++) {
-      var baseRocket = random(bestRockets)
-      var childNN = baseRocket.neuralNetwork.copy()
-      childNN.mutate(config.mutationRate) // * (1-(baseRocket.fitness))
+    if (config.debugMode) {
+      console.log('Detections scored. Best fitness:', report.best)
+    }
+
+    if (Population.mode === 'evaluate') {
+      return report
+    }
+
+    const elite = selectElite(Population.rockets, Population.popSize)
+    const newRockets = []
+    Rocket.launchSequenceCounter = 0
+    for (let i = 0; i < Population.popSize; i++) {
+      const parent = pickParent(elite, defaultRandom)
+      const childNN = parent.neuralNetwork.copy()
+      childNN.mutate(config.mutationRate)
       newRockets.push(new Rocket(childNN))
     }
 
-    // This instance of rockets are the new rockets
+    Population.rockets.forEach((rocket) => {
+      if (rocket.neuralNetwork && !newRockets.some((child) => child.neuralNetwork === rocket.neuralNetwork)) {
+        rocket.neuralNetwork.dispose()
+      }
+    })
+
     Population.rockets = newRockets
     Population.successCounter = 0
     Population.failedCounter = 0
+    return report
   }
 
-  // Calls for update and show functions
-  static run(mustDraw) {
-    for (var r of Population.rockets) {
-      if (framesCounter / 5 > r.launchSequence) {
-        r.update()
-        // Displays rockets to screen
-        if (mustDraw) r.draw()
+  static run(mustDraw, framesCounter) {
+    for (const rocket of Population.rockets) {
+      if (framesCounter / 5 > rocket.launchSequence) {
+        const flyingBefore = rocket.flying
+        rocket.update()
+        if (flyingBefore && !rocket.flying) {
+          if (rocket.success) Population.successCounter++
+          else if (rocket.crashed) Population.failedCounter++
+        }
+        if (mustDraw) rocket.draw()
       }
     }
   }
 
-  // Checks if all missiles are crashed
-  static simulationFinished() {
-    if (framesCounter > config.simulation.timeoutFrames) {
-      for (let r of Population.rockets) {
-        r.flying = false
+  static simulationFinished(framesCounter) {
+    if (isGenerationDone(framesCounter, config.simulation.timeoutFrames, Population.rockets)) {
+      for (const rocket of Population.rockets) {
+        rocket.flying = false
       }
       return true
     }
+    return false
+  }
 
-    for (let r of Population.rockets) {
-      if (r.flying) {
-        return false
-      }
-    }
-    return true
+  static bestRocket() {
+    if (!Population.rockets.length) return null
+    return Population.rockets.slice().sort((a, b) => (b.fitness || 0) - (a.fitness || 0))[0]
+  }
+
+  static exportBestBrain(extra = {}) {
+    const best = Population.bestRocket()
+    if (!best) throw new Error('No rockets to export')
+    return best.neuralNetwork.toJSON({
+      savedAt: new Date().toISOString(),
+      scene: extra.scene || null,
+      generation: extra.generation || null,
+      fitness: best.fitness || 0,
+    })
+  }
+
+  static loadBrain(brainData, options = {}) {
+    Population.loadedBrain = cloneBrainData(brainData)
+    Population.mode = options.mode || 'evaluate'
+    Population.initialize({
+      brain: Population.loadedBrain,
+      mode: Population.mode,
+      mutate: options.mutate === true,
+      popSize: options.popSize,
+    })
+    return Population.loadedBrain
+  }
+
+  static fingerprints() {
+    return Population.rockets.map((rocket) => rocket.neuralNetwork.fingerprint())
   }
 
   static increaseSuccessCounter() {
     Population.successCounter++
   }
+
   static increaseFailedCounter() {
     Population.failedCounter++
-  }
-
-  static async saveModels(modelName) {
-    await childNN.saveModel('test-01')
-  }
-
-  static async loadModels(modelName) {
-    //  const rebuiltChildNN = await NeuralNetwork.loadModel(
-    //    'test-01',
-    //    childNN.input_nodes,
-    //    childNN.hidden_nodes,
-    //    childNN.output_nodes
-    //  )
   }
 }

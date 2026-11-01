@@ -1,3 +1,6 @@
+import { Barrier } from '../../src/barrier.js'
+import { Stage } from '../../src/stage.js'
+
 // gui panel references
 var guiPhysics, guiControls, selectedObjectParametersGui, selectedObjectParametersQS
 
@@ -215,4 +218,14 @@ function saveScene() {
 
 function getSceneStorageName(sceneName) {
   return 'scene-' + sceneName.replace(' ', '-')
+}
+
+window.setup = setup
+window.draw = draw
+window.mousePressed = mousePressed
+window.mouseDragged = mouseDragged
+window.mouseReleased = mouseReleased
+window.sentientDesigner = {
+  addBarrier,
+  Stage,
 }

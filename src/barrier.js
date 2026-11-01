@@ -1,29 +1,23 @@
-class Barrier {
+import { lineIntersectsRect, pointInRect } from './core/collision.js'
+
+export class Barrier {
   static nextId = 0
 
   constructor(ry, rx, rw = 50, rh = 50) {
-    // TODO: Add support for Align options Ej: { ry: 140, hAlign: 'right' }
     this.id = Barrier.nextId++
     this.ry = ry
     this.rx = rx
     this.rw = rw
     this.rh = rh
-
     this.color = 'white'
   }
 
   isCollidingWithPoint(pointX, pointY) {
-    return collidePointRect(pointX, pointY, this.rx, this.ry, this.rw, this.rh, false)
-    // return (
-    //   pointX > this.rx &&
-    //   pointX < this.rx + this.rw &&
-    //   pointY > this.ry &&
-    //   pointY < this.ry + this.rh
-    // )
+    return pointInRect(pointX, pointY, this.rx, this.ry, this.rw, this.rh)
   }
 
   isCollidingWithLine(firstPointX, firstPointY, secondPointX, secondPointY) {
-    return collideLineRect(
+    return lineIntersectsRect(
       firstPointX,
       firstPointY,
       secondPointX,
@@ -31,8 +25,7 @@ class Barrier {
       this.rx,
       this.ry,
       this.rw,
-      this.rh,
-      false
+      this.rh
     )
   }
 
@@ -41,8 +34,10 @@ class Barrier {
     rect(this.rx, this.ry, this.rw, this.rh)
   }
 
-  // Constructor function to create a new Person object from a JSON string.
   static fromJSON(json) {
-    return Object.assign(new Barrier(), json)
+    const barrier = new Barrier(json.ry, json.rx, json.rw, json.rh)
+    if (json.id !== undefined) barrier.id = json.id
+    if (json.color) barrier.color = json.color
+    return barrier
   }
 }
