@@ -21,7 +21,7 @@ let logP
 
 function setup() {
   console.log('SETUP START')
-  let CANVAs = createCanvas(500, 600)
+  let canvas = createCanvas(500, 600)
   canvas.parent('canvasDiv')
 
   Stage.initialize()

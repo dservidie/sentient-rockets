@@ -64,8 +64,8 @@ function draw() {
   }
 }
 
-function mouseClicked() {
-  if (e.target.tagName === 'CANVAS') {
+function mouseClicked(e) {
+  if (e && e.target && e.target.tagName === 'CANVAS') {
     if (paused) {
       paused = false
     } else {

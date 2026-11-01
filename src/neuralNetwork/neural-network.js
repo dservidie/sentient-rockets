@@ -1,6 +1,6 @@
 class NeuralNetwork {
   constructor(a, b, c, d) {
-    if (a instanceof tf.Sequential) {
+    if (NeuralNetwork.isModel(a)) {
       this.model = a
       this.input_nodes = b
       this.hidden_nodes = c
@@ -14,21 +14,21 @@ class NeuralNetwork {
   }
 
   copy() {
-    return tf.tidy(() => {
-      const modelCopy = this.createModel()
+    const modelCopy = this.createModel()
+    tf.tidy(() => {
       const weights = this.model.getWeights()
       const weightCopies = []
       for (let i = 0; i < weights.length; i++) {
         weightCopies[i] = weights[i].clone()
       }
       modelCopy.setWeights(weightCopies)
-      return new NeuralNetwork(
-        modelCopy,
-        this.input_nodes,
-        this.hidden_nodes,
-        this.output_nodes
-      )
     })
+    return new NeuralNetwork(
+      modelCopy,
+      this.input_nodes,
+      this.hidden_nodes,
+      this.output_nodes
+    )
   }
 
   mutate(rate) {
@@ -90,5 +90,14 @@ class NeuralNetwork {
     const model = await tf.loadLayersModel(`localstorage://model-${name}`)
     console.log('loadModel/model: ', model)
     return new NeuralNetwork(model, inputNodes, hiddenNodes, outputNodes)
+  }
+
+  static isModel(value) {
+    return (
+      value &&
+      typeof value.predict === 'function' &&
+      typeof value.getWeights === 'function' &&
+      typeof value.setWeights === 'function'
+    )
   }
 }

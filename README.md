@@ -1,18 +1,43 @@
 # Sentient Rockets Sandbox
 
-Improved version of my previous project SmartRockets. Adding sensors to the rocket to make them able to sense its environment and react accordingly.
+A p5.js + TensorFlow.js sandbox where rockets learn to fly with a genetic algorithm. Each rocket senses obstacles and is steered by its own neural network.
 
-## Description
+**Live demo:** https://dservidie.github.io/sentient-rockets/
 
-Rockets don't use a fixed sequence of commands anymore. Now they are controlled by a neural network that receives as the input, a list of boolean values representing the detection or not of an obstacle in front of the rocket, and in returns the predictions returns a fly instruction to the rocket (steering and thrust). The neural network of each rocket is generated randomly, and after each generation, the most successful rockets will be used as a base for the next generation of rockets. A mutation is added to its neurons, giving opportunities to improve performance, and then pass the learned features to the next generation.
+![Sentient Rockets simulation](docs/sim.png)
+
+This is an improved version of [Smart Rockets](https://codepen.io/daniel-servidie/pen/pogegWL). Rockets no longer follow a fixed list of commands. They sense the environment and react.
+
+## How it works
+
+Each rocket has five range sensors (rays) plus a few flight readings. Those values are the inputs to a small neural network. The network outputs a fly instruction: thrust and steering.
+
+**Inputs (8):**
+
+- Horizontal and vertical velocity
+- Current steering acceleration
+- Five boolean sensor flags (1 if that ray hits a barrier or the world edge, otherwise 0)
+
+**Network:** 8 inputs → 16 hidden neurons (sigmoid) → 2 outputs (sigmoid)
+
+**Outputs:**
+
+- Thrust (0–1)
+- Steering (mapped from 0–1 to left/right)
+
+The first generation starts with random weights. After a generation finishes, the top-performing rockets are copied into the next generation with small random mutations. Over time, useful behaviors can spread through the population.
+
+Use the [scene designer](https://dservidie.github.io/sentient-rockets/scene-designer/) to place barriers, then load that scene in the sim.
+
+![Scene designer](docs/scene-designer.png)
 
 ## Rocket controls
 
-Rockets fly instructions are thrust power, and steering.
+Rockets are controlled by thrust and steering.
 
-If you want to test manually the rockets control parameters to understand the physics you can do it in this codepen:
+To try the physics by hand, use this CodePen:
 https://codepen.io/daniel-servidie/pen/pogegWL
 
-## Watch the neural network learn in from or your eyes in this deployed site:
+## Watch the neural network learn in front of your eyes
 
 https://dservidie.github.io/sentient-rockets/
