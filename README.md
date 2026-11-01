@@ -27,9 +27,22 @@ Each rocket has five range sensors (rays) plus a few flight readings. Those valu
 
 The first generation starts with random weights. After a generation finishes, the top-performing rockets are copied into the next generation with small random mutations. Over time, useful behaviors can spread through the population.
 
-Use the [scene designer](https://dservidie.github.io/sentient-rockets/scene-designer/) to place barriers, then load that scene in the sim.
+Built-in scenes: `corridor` and `wide-gap`. You can also make your own in the [scene designer](https://dservidie.github.io/sentient-rockets/scene-designer/).
 
 ![Scene designer](docs/scene-designer.png)
+
+## Transfer a brain between scenes
+
+A brain is the network topology plus its weights, saved as a JSON file.
+
+1. Train rockets in one scene (`corridor`, `wide-gap`, or a scene from the designer).
+2. Click **Export best brain**. That downloads a JSON file and also keeps a copy in the page.
+3. Pick a different scene and click **Load scene**.
+4. Click **Load brain** and choose the JSON file.
+5. **Evaluate loaded brain** runs that same network with no mutation and reports how it did.
+6. **Continue training from loaded** seeds the next generation from those weights instead of random ones.
+
+The file stores input/hidden/output sizes and every weight, so the same brain can fly in another layout.
 
 ## Rocket controls
 
@@ -41,3 +54,13 @@ https://codepen.io/daniel-servidie/pen/pogegWL
 ## Watch the neural network learn in front of your eyes
 
 https://dservidie.github.io/sentient-rockets/
+
+## Tests
+
+```
+npm test
+npx playwright install chromium
+npm run test:e2e
+```
+
+`npm test` runs the unit tests (networks, fitness, physics, sensors, scenes, brain save/load). `npm run test:e2e` serves the site and checks the sim, the scene designer, and a brain moving from `corridor` to `wide-gap`.
